@@ -1,0 +1,10 @@
+apiVersion: v2
+name: cognitive-unit
+description: Ponder cognitive unit — a parameterized deployment of neuromorphic regions
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ponder
+  - ai
+  - inference

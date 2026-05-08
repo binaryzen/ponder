@@ -1,0 +1,123 @@
+---
+# Ansible playbook: bootstrap a Lambda Labs instance for Ponder.
+# Usage: ansible-playbook bootstrap.yml -i <ip>, --private-key ~/.ssh/lambda_key
+# Prerequisites: fresh Ubuntu 22.04 instance, SSH access as ubuntu.
+
+- name: Bootstrap Ponder k3s cluster
+  hosts: all
+  become: true
+  vars:
+    k3s_version: "v1.29.4+k3s1"
+    nvidia_plugin_version: "0.14.5"
+    kubeconfig_local: "~/.kube/ponder-config"
+
+  tasks:
+
+    # ── System ──────────────────────────────────────────────────────────────
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install system packages
+      apt:
+        name:
+          - curl
+          - git
+          - htop
+          - python3-pip
+        state: present
+
+    # ── k3s ─────────────────────────────────────────────────────────────────
+
+    - name: Install k3s
+      shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          sh -s - server \
+            --disable traefik \
+            --disable servicelb \
+            --write-kubeconfig-mode 644
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for k3s to be ready
+      command: k3s kubectl get nodes
+      register: nodes_ready
+      retries: 12
+      delay: 10
+      until: nodes_ready.rc == 0
+
+    - name: Copy kubeconfig to ubuntu home
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/ubuntu/.kube/config
+        owner: ubuntu
+        group: ubuntu
+        mode: "0600"
+        remote_src: true
+
+    # ── NVIDIA ──────────────────────────────────────────────────────────────
+
+    - name: Check for GPU
+      command: nvidia-smi
+      register: nvidia_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Deploy NVIDIA device plugin
+      when: nvidia_check.rc == 0
+      become_user: ubuntu
+      shell: |
+        k3s kubectl create -f \
+          https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v{{ nvidia_plugin_version }}/nvidia-device-plugin.yml \
+          --dry-run=client -o yaml | k3s kubectl apply -f -
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+
+    # ── Namespaces & RBAC ───────────────────────────────────────────────────
+
+    - name: Create ponder namespace
+      become_user: ubuntu
+      command: k3s kubectl create namespace ponder --dry-run=client -o yaml
+      register: ns_yaml
+      changed_when: false
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+
+    - name: Apply ponder namespace
+      become_user: ubuntu
+      shell: echo "{{ ns_yaml.stdout }}" | k3s kubectl apply -f -
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+
+    # ── Helm ────────────────────────────────────────────────────────────────
+
+    - name: Install Helm
+      shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    # ── Fetch kubeconfig locally ─────────────────────────────────────────────
+
+    - name: Fetch kubeconfig
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ kubeconfig_local }}"
+        flat: true
+
+    - name: Patch kubeconfig server address
+      delegate_to: localhost
+      become: false
+      replace:
+        path: "{{ kubeconfig_local }}"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ ansible_host }}:6443"
+
+    - name: Print next steps
+      debug:
+        msg: |
+          Cluster ready. Run:
+            export KUBECONFIG={{ kubeconfig_local }}
+            kubectl get nodes

@@ -1,0 +1,18 @@
+{{- if .Values.unit.modelServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.unit.name }}-model-server
+  namespace: {{ .Values.unit.namespace }}
+  labels:
+    {{- include "cognitive-unit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: model-server
+spec:
+  selector:
+    app.kubernetes.io/name: {{ .Values.unit.name }}-model-server
+  ports:
+    - name: http
+      port: {{ .Values.unit.modelServer.port }}
+      targetPort: {{ .Values.unit.modelServer.port }}
+  type: ClusterIP
+{{- end }}

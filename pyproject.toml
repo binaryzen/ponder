@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ponder"
+version = "0.1.0"
+description = "Neuromorphic multi-agent inference system"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "redis>=5.0",
+    "qdrant-client>=1.9",
+    "sentence-transformers>=3.0",
+    "httpx>=0.27",
+    "pydantic>=2.0",
+    "numpy>=1.26",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+ponder = "ponder.__main__:main"
+ponder-audit = "ponder.audit.cli:main"
+ponder-diagnostics = "ponder.diagnostics.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ponder"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+pythonpath = ["src"]

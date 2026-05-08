@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ponder Diagnostic Panel</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --col-left: 220px;
+    --col-right: 360px;
+    --row-bottom: 250px;
+  }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    background: #1c1c1c;
+    color: #d4d4d4;
+    display: grid;
+    grid-template-columns: var(--col-left) 1fr var(--col-right);
+    grid-template-rows: 1fr var(--row-bottom);
+    grid-template-areas:
+      "components state trace"
+      "io         io    trace";
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  /* Prevent text selection while dragging */
+  body.resizing { user-select: none; cursor: col-resize; }
+  body.resizing-row { user-select: none; cursor: row-resize; }
+
+  .panel {
+    border: 1px solid #333;
+    background: #232323;
+    overflow: auto;
+    padding: 8px;
+    min-width: 0;
+    min-height: 0;
+  }
+  .panel h2 {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #888;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .panel h2 .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+  .components { grid-area: components; }
+  .state      { grid-area: state; display: grid; grid-template-rows: 1fr 1fr; gap: 4px; min-height: 0; }
+  .trace      { grid-area: trace; }
+  .io         { grid-area: io; display: grid; grid-template-rows: auto 1fr; gap: 4px; min-height: 0; }
+
+  /* Collapsed side panels: narrow strip, content hidden */
+  .panel.collapsed { overflow: hidden; }
+  .panel.collapsed > *:not(h2) { display: none; }
+  .panel.collapsed h2 { border-bottom: none; margin-bottom: 0; }
+  .panel.collapsed h2 .title { display: none; }
+
+  .state-section, .io-section {
+    border: 1px solid #333;
+    background: #232323;
+    padding: 8px;
+    overflow: auto;
+    min-height: 0;
+  }
+  .state-section h3, .io-section h3 {
+    margin: 0 0 6px 0;
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .state-section h3 .title, .io-section h3 .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Collapsed state/io sub-sections */
+  .state-section.collapsed > *:not(h3),
+  .io-section.collapsed > *:not(h3) { display: none; }
+  .state-section.collapsed, .io-section.collapsed { overflow: hidden; }
+
+  /* Collapse / expand buttons */
+  .collapse-btn {
+    padding: 1px 4px;
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: inherit;
+    line-height: 1;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .collapse-btn:hover { background: #333; color: #aaa; }
+
+  /* Drag resizer handles (fixed, overlaid on panel gaps) */
+  .resizer {
+    position: fixed;
+    z-index: 200;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .resizer.col { top: 0; bottom: 0; width: 6px; cursor: col-resize; }
+  .resizer.row { left: 0; height: 6px; cursor: row-resize; }
+  .resizer:hover, .resizer.active { background: #2563eb55; }
+
+  ul.list { list-style: none; padding: 0; margin: 0; }
+  ul.list li {
+    padding: 4px 6px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  ul.list li:hover { background: #2e2e2e; }
+  ul.list li.selected { background: #2563eb33; color: #93c5fd; }
+  .badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: #333;
+    color: #aaa;
+  }
+  .badge.model { background: #3b1f4f; color: #d8b4fe; }
+  .badge.tick  { background: #1f3a4f; color: #93c5fd; }
+  .badge.running { background: #1f4f2f; color: #86efac; }
+
+  .kv { font-size: 11px; }
+  .kv .key { color: #93c5fd; }
+  .kv .val { color: #d4d4d4; }
+  .kv .urn { color: #fbbf24; }
+  .kv pre { margin: 2px 0 6px 1em; padding: 4px 6px; background: #1c1c1c; border-radius: 2px; white-space: pre-wrap; word-break: break-all; }
+
+  .event {
+    padding: 2px 4px;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .event .ts     { color: #888; }
+  .event .region { color: #93c5fd; }
+  .event .type   { color: #fbbf24; }
+  .event .extra  { color: #aaa; font-size: 10px; margin-left: 6px; }
+  .event.failed  { background: #4f1f1f44; }
+
+  input[type=text] {
+    width: 100%;
+    padding: 6px 8px;
+    background: #1c1c1c;
+    color: #d4d4d4;
+    border: 1px solid #444;
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  button {
+    padding: 6px 12px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #444; }
+  button.secondary:hover { background: #555; }
+
+  .input-row { display: flex; gap: 6px; }
+  .input-row input { flex: 1; }
+  .output-line { padding: 4px 6px; border-bottom: 1px solid #2a2a2a; }
+</style>
+</head>
+<body>
+
+<!-- Column drag handles — positioned by initResizers() -->
+<div id="rz-left"  class="resizer col"></div>
+<div id="rz-right" class="resizer col"></div>
+<!-- Row drag handle — spans io area only (stops before trace) -->
+<div id="rz-row"   class="resizer row"></div>
+
+<div class="panel components">
+  <h2>
+    <button class="collapse-btn" id="btn-components" onclick="togglePanel('components')" title="Collapse">⟨</button>
+    <span class="title">Components</span>
+  </h2>
+  <ul class="list" id="component-list"></ul>
+  <h2 style="margin-top: 16px;">
+    <span class="title">Context URNs</span>
+  </h2>
+  <ul class="list" id="context-urn-list"></ul>
+</div>
+
+<div class="state">
+  <div class="state-section" id="ss-component">
+    <h3>
+      <button class="collapse-btn" onclick="toggleSection('ss-component')" title="Collapse">▾</button>
+      <span class="title">Component state — <span id="selected-component">(none)</span></span>
+    </h3>
+    <div id="component-state" class="kv">Select a component on the left.</div>
+  </div>
+  <div class="state-section" id="ss-context">
+    <h3>
+      <button class="collapse-btn" onclick="toggleSection('ss-context')" title="Collapse">▾</button>
+      <span class="title">Context value — <span id="selected-context">(none)</span></span>
+    </h3>
+    <div id="context-value" class="kv">Select a context URN on the left.</div>
+  </div>
+</div>
+
+<div class="panel trace">
+  <h2>
+    <button class="collapse-btn" id="btn-trace" onclick="togglePanel('trace')" title="Collapse">⟩</button>
+    <span class="title">Trace events <span id="trace-status" style="font-weight: normal; color: #666;"></span></span>
+  </h2>
+  <div id="trace-events"></div>
+</div>
+
+<div class="io">
+  <div class="io-section" id="ss-input">
+    <h3>
+      <button class="collapse-btn" onclick="toggleSection('ss-input')" title="Collapse">▾</button>
+      <span class="title">Input</span>
+    </h3>
+    <div class="input-row">
+      <input type="text" id="input-field" placeholder="Type a request and press Enter..." autofocus>
+      <button onclick="sendInput()">Send</button>
+      <button class="secondary" onclick="sendInterrupt()" title="Trigger user_interrupt">Interrupt</button>
+    </div>
+  </div>
+  <div class="io-section" id="ss-output">
+    <h3>
+      <button class="collapse-btn" onclick="toggleSection('ss-output')" title="Collapse">▾</button>
+      <span class="title">Output (speaker.spoken_log)</span>
+    </h3>
+    <div id="output-display"></div>
+  </div>
+</div>
+
+<script>
+// ── Local model ───────────────────────────────────────────────────────────
+let components = [];
+let cachedState = {};
+let selectedComponent = null;
+let selectedContextUrn = null;
+const knownEventIds = new Set();
+let stateStream = null;
+let eventStream = null;
+
+// ── Resize & collapse ─────────────────────────────────────────────────────
+
+const _prevWidths = {};
+
+function cssVar(name) {
+  return parseInt(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+}
+function setVar(name, px) {
+  document.documentElement.style.setProperty(name, px + 'px');
+}
+
+function positionResizers() {
+  const left  = cssVar('--col-left');
+  const right = cssVar('--col-right');
+  const bot   = cssVar('--row-bottom');
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  document.getElementById('rz-left').style.left   = (left - 3) + 'px';
+  document.getElementById('rz-right').style.left  = (W - right - 3) + 'px';
+  document.getElementById('rz-row').style.top      = (H - bot - 3) + 'px';
+  document.getElementById('rz-row').style.right    = right + 'px';
+}
+
+function makeColDragger(id, cssVarName, direction) {
+  const el = document.getElementById(id);
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    el.classList.add('active');
+    document.body.classList.add('resizing');
+    const startX = e.clientX;
+    const startW = cssVar(cssVarName);
+    const onMove = e => {
+      const w = Math.max(28, Math.min(window.innerWidth * 0.5, startW + direction * (e.clientX - startX)));
+      setVar(cssVarName, w);
+      positionResizers();
+    };
+    const onUp = () => {
+      el.classList.remove('active');
+      document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function makeRowDragger(id) {
+  const el = document.getElementById(id);
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    el.classList.add('active');
+    document.body.classList.add('resizing-row');
+    const startY = e.clientY;
+    const startH = cssVar('--row-bottom');
+    const onMove = e => {
+      const h = Math.max(60, Math.min(window.innerHeight * 0.7, startH - (e.clientY - startY)));
+      setVar('--row-bottom', h);
+      positionResizers();
+    };
+    const onUp = () => {
+      el.classList.remove('active');
+      document.body.classList.remove('resizing-row');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function togglePanel(name) {
+  const panel = document.querySelector('.panel.' + name);
+  const btn   = document.getElementById('btn-' + name);
+  const isNowCollapsed = panel.classList.toggle('collapsed');
+  if (name === 'components') {
+    if (isNowCollapsed) {
+      _prevWidths.left = cssVar('--col-left');
+      setVar('--col-left', 28);
+      btn.textContent = '⟩';
+      btn.title = 'Expand';
+    } else {
+      setVar('--col-left', _prevWidths.left || 220);
+      btn.textContent = '⟨';
+      btn.title = 'Collapse';
+    }
+  } else if (name === 'trace') {
+    if (isNowCollapsed) {
+      _prevWidths.right = cssVar('--col-right');
+      setVar('--col-right', 28);
+      btn.textContent = '⟨';
+      btn.title = 'Expand';
+    } else {
+      setVar('--col-right', _prevWidths.right || 360);
+      btn.textContent = '⟩';
+      btn.title = 'Collapse';
+    }
+  }
+  positionResizers();
+}
+
+function toggleSection(id) {
+  const section = document.getElementById(id);
+  const btn = section.querySelector('.collapse-btn');
+  const isNowCollapsed = section.classList.toggle('collapsed');
+  btn.textContent = isNowCollapsed ? '▸' : '▾';
+  btn.title = isNowCollapsed ? 'Expand' : 'Collapse';
+}
+
+function initResizers() {
+  makeColDragger('rz-left',  '--col-left',   1);
+  makeColDragger('rz-right', '--col-right', -1);
+  makeRowDragger('rz-row');
+  positionResizers();
+  window.addEventListener('resize', positionResizers);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function fmtVal(v) {
+  if (v === null || v === undefined) return "<em style='color:#666'>(unset)</em>";
+  if (typeof v === "string") return JSON.stringify(v);
+  return JSON.stringify(v, null, 2);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+}
+
+function setStreamStatus(label, ok) {
+  const el = document.getElementById("trace-status");
+  el.innerText = (ok ? "● " : "○ ") + label;
+  el.style.color = ok ? "#86efac" : "#888";
+}
+
+// ── Snapshot ──────────────────────────────────────────────────────────────
+
+async function fetchSnapshot() {
+  const resp = await fetch("/api/snapshot");
+  if (!resp.ok) return;
+  const data = await resp.json();
+  components = data.components;
+  cachedState = { ...data.state };
+  for (const [urn, v] of Object.entries(data.context)) {
+    cachedState[urn] = v;
+  }
+  renderAll();
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────
+
+function renderAll() {
+  renderComponents();
+  renderContextUrns();
+  renderComponentState();
+  renderContextValue();
+  renderOutput();
+}
+
+function renderComponents() {
+  const ul = document.getElementById("component-list");
+  ul.innerHTML = "";
+  for (const c of components) {
+    const li = document.createElement("li");
+    li.className = (c.name === selectedComponent) ? "selected" : "";
+    const badges = [];
+    if (c.needs_model) badges.push("<span class='badge model'>model</span>");
+    if (c.tick_seconds) badges.push("<span class='badge tick'>tick " + c.tick_seconds + "s</span>");
+    li.innerHTML = "<span>" + c.name + "</span><span>" + badges.join(" ") + " <span class='badge'>p" + c.priority + "</span></span>";
+    li.onclick = () => { selectedComponent = c.name; renderComponents(); renderComponentState(); };
+    ul.appendChild(li);
+  }
+}
+
+function renderContextUrns() {
+  const ul = document.getElementById("context-urn-list");
+  ul.innerHTML = "";
+  const ctxKeys = Object.keys(cachedState).filter(k => k.startsWith("context:")).sort();
+  for (const urn of ctxKeys) {
+    const li = document.createElement("li");
+    li.className = (urn === selectedContextUrn) ? "selected" : "";
+    li.innerHTML = "<span class='urn'>" + urn + "</span>";
+    li.onclick = () => { selectedContextUrn = urn; renderContextUrns(); renderContextValue(); };
+    ul.appendChild(li);
+  }
+}
+
+function renderComponentState() {
+  const div = document.getElementById("component-state");
+  document.getElementById("selected-component").innerText = selectedComponent || "(none)";
+  if (!selectedComponent) { div.innerText = "Select a component on the left."; return; }
+  const prefix = "component:" + selectedComponent + ":";
+  const items = Object.entries(cachedState).filter(([k]) => k.startsWith(prefix));
+  if (items.length === 0) { div.innerHTML = "<em style='color:#666'>(no state written yet)</em>"; return; }
+  div.innerHTML = items.map(([k, v]) => {
+    const key = k.substring(prefix.length);
+    return "<div><span class='key'>" + key + "</span></div><pre>" + escapeHtml(fmtVal(v)) + "</pre>";
+  }).join("");
+}
+
+function renderContextValue() {
+  const div = document.getElementById("context-value");
+  document.getElementById("selected-context").innerText = selectedContextUrn || "(none)";
+  if (!selectedContextUrn) { div.innerText = "Select a context URN on the left."; return; }
+  div.innerHTML = "<pre>" + escapeHtml(fmtVal(cachedState[selectedContextUrn])) + "</pre>";
+}
+
+function renderOutput() {
+  const log = cachedState["component:speaker:spoken_log"] || [];
+  const div = document.getElementById("output-display");
+  div.innerHTML = log.map(line => "<div class='output-line'>" + escapeHtml(line) + "</div>").join("");
+  div.scrollTop = div.scrollHeight;
+}
+
+function appendEvent(ev) {
+  if (knownEventIds.has(ev.stream_id)) return;
+  knownEventIds.add(ev.stream_id);
+  const container = document.getElementById("trace-events");
+  const div = document.createElement("div");
+  div.className = "event" + (ev.payload && ev.payload.boundary === "specialist_failed" ? " failed" : "");
+  const ts = (ev.emitted_at || "").substring(11, 23);
+  const boundary = ev.payload && ev.payload.boundary || "";
+  const dur = ev.payload && ev.payload.duration_ms ? ev.payload.duration_ms + "ms" : "";
+  const writes = ev.payload && ev.payload.writes && ev.payload.writes.length ? "writes=" + ev.payload.writes.join(",") : "";
+  div.innerHTML = "<span class='ts'>" + ts + "</span> <span class='region'>" + (ev.region || "?") + "</span> <span class='type'>" + (ev.event_type || "?") + "</span><span class='extra'>" + boundary + " " + dur + " " + writes + "</span>";
+  container.prepend(div);
+  setStreamStatus(knownEventIds.size + " events", true);
+}
+
+// ── SSE wiring ────────────────────────────────────────────────────────────
+
+function openStateStream() {
+  if (stateStream) stateStream.close();
+  stateStream = new EventSource("/api/state/stream");
+  stateStream.onmessage = (e) => {
+    const change = JSON.parse(e.data);
+    if (change.value === null || change.value === undefined) {
+      delete cachedState[change.key];
+    } else {
+      cachedState[change.key] = change.value;
+    }
+    if (change.key.startsWith("context:")) {
+      renderContextUrns();
+      if (change.key === selectedContextUrn) renderContextValue();
+    } else if (change.key.startsWith("component:")) {
+      const owner = change.key.split(":")[1];
+      if (owner === selectedComponent) renderComponentState();
+      if (change.key === "component:speaker:spoken_log") renderOutput();
+    }
+  };
+  stateStream.onerror = () => setTimeout(fetchSnapshot, 1000);
+}
+
+function openEventStream() {
+  if (eventStream) eventStream.close();
+  eventStream = new EventSource("/api/events/stream");
+  eventStream.onopen = () => setStreamStatus(knownEventIds.size + " events", true);
+  eventStream.onmessage = (e) => appendEvent(JSON.parse(e.data));
+  eventStream.onerror = () => setStreamStatus("disconnected", false);
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────
+
+async function sendInput() {
+  const f = document.getElementById("input-field");
+  const text = f.value.trim();
+  if (!text) return;
+  await fetch("/api/input", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
+  f.value = "";
+}
+
+async function sendInterrupt() {
+  await fetch("/api/interrupt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "panel-issued" })
+  });
+}
+
+document.getElementById("input-field").addEventListener("keydown", e => {
+  if (e.key === "Enter") sendInput();
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+
+(async () => {
+  initResizers();
+  await fetchSnapshot();
+  openStateStream();
+  openEventStream();
+})();
+</script>
+
+</body>
+</html>

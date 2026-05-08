@@ -1,0 +1,157 @@
+# Default values for a Ponder cognitive unit.
+# Override per-unit by providing a custom values file:
+#   helm install unit-alpha charts/cognitive-unit -f unit-alpha.yaml
+
+unit:
+  name: unit-alpha
+  namespace: ponder
+  image:
+    repository: ghcr.io/your-org/ponder
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  # ── Shared infrastructure ──────────────────────────────────────────────────
+  redis:
+    url: redis://redis.ponder.svc.cluster.local:6379
+  qdrant:
+    url: http://qdrant.ponder.svc.cluster.local:6333
+
+  # ── Cognitive regions ──────────────────────────────────────────────────────
+  # Set enabled: true for regions active in this phase.
+  # Schema covers all regions; unused ones are deployed with enabled: false.
+  regions:
+
+    thalamus:
+      enabled: true
+      type: encoder
+      model: sentence-transformers/all-MiniLM-L6-v2
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "200m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+      gpu: false
+
+    amygdala:
+      enabled: false  # Phase 2
+      type: classifier
+      model: sentence-transformers/all-MiniLM-L6-v2
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "200m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+      gpu: false
+
+    hippocampus:
+      enabled: true
+      type: retrieval
+      model: sentence-transformers/all-MiniLM-L6-v2
+      memoryCollection: hippocampus
+      memoryTopK: 5
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "200m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+      gpu: false
+
+    prefrontal:
+      enabled: true
+      type: generative
+      model: mistralai/Mistral-7B-Instruct-v0.3
+      promptTemplate: prefrontal_v1.txt
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "2000m"
+        limits:
+          memory: "20Gi"
+          cpu: "4000m"
+          nvidia.com/gpu: "1"
+      gpu: true
+
+    wernicke:
+      enabled: false  # Phase 2
+      type: generative
+      model: mistralai/Mistral-7B-Instruct-v0.3
+      promptTemplate: wernicke_v1.txt
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "2000m"
+        limits:
+          memory: "20Gi"
+          cpu: "4000m"
+          nvidia.com/gpu: "1"
+      gpu: true
+
+    basal_ganglia:
+      enabled: false  # Phase 2
+      type: classifier
+      model: ""
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+      gpu: false
+
+    conscience:
+      enabled: false  # Phase 2
+      type: generative
+      model: mistralai/Mistral-7B-Instruct-v0.3
+      promptTemplate: conscience_v1.txt
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "2000m"
+        limits:
+          memory: "20Gi"
+          cpu: "4000m"
+          nvidia.com/gpu: "1"
+      gpu: true
+
+    broca:
+      enabled: true
+      type: generative
+      model: mistralai/Mistral-7B-Instruct-v0.3
+      promptTemplate: broca_v1.txt
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "2000m"
+        limits:
+          memory: "20Gi"
+          cpu: "4000m"
+          nvidia.com/gpu: "1"
+      gpu: true
+
+  # ── Model server ───────────────────────────────────────────────────────────
+  # vLLM instance serving Mistral 7B for generative regions
+  modelServer:
+    enabled: true
+    image: vllm/vllm-openai:latest
+    model: mistralai/Mistral-7B-Instruct-v0.3
+    port: 8000
+    resources:
+      requests:
+        memory: "16Gi"
+        cpu: "2000m"
+      limits:
+        memory: "20Gi"
+        cpu: "4000m"
+        nvidia.com/gpu: "1"
+
+  # ── Memory ────────────────────────────────────────────────────────────────
+  memory:
+    backend: redis
+    namespace: unit-alpha

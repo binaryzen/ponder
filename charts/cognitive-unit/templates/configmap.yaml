@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cognitive-unit.name" . }}-config
+  namespace: {{ .Values.unit.namespace }}
+  labels:
+    {{- include "cognitive-unit.labels" . | nindent 4 }}
+data:
+  PONDER_REDIS_URL: {{ .Values.unit.redis.url | quote }}
+  PONDER_QDRANT_URL: {{ .Values.unit.qdrant.url | quote }}
+  PONDER_MODEL_URL: {{ printf "http://%s-model-server.%s.svc.cluster.local:%d" .Values.unit.name .Values.unit.namespace (.Values.unit.modelServer.port | int) | quote }}
+  PONDER_ENCODER_MODEL: {{ .Values.unit.regions.thalamus.model | quote }}
+  PONDER_GENERATIVE_MODEL: {{ .Values.unit.regions.prefrontal.model | quote }}
+  PONDER_MEMORY_COLLECTION: {{ .Values.unit.regions.hippocampus.memoryCollection | quote }}
+  PONDER_MEMORY_TOP_K: {{ .Values.unit.regions.hippocampus.memoryTopK | quote }}

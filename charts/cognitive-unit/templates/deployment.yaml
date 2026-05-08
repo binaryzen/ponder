@@ -1,0 +1,76 @@
+{{/* Orchestrator deployment — runs the full LangGraph pipeline */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cognitive-unit.name" . }}-orchestrator
+  namespace: {{ .Values.unit.namespace }}
+  labels:
+    {{- include "cognitive-unit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "cognitive-unit.name" . }}-orchestrator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "cognitive-unit.name" . }}-orchestrator
+        {{- include "cognitive-unit.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: orchestrator
+          image: {{ .Values.unit.image.repository }}:{{ .Values.unit.image.tag }}
+          imagePullPolicy: {{ .Values.unit.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "cognitive-unit.name" . }}-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+---
+{{/* vLLM model server — shared by all generative regions */}}
+{{- if .Values.unit.modelServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.unit.name }}-model-server
+  namespace: {{ .Values.unit.namespace }}
+  labels:
+    {{- include "cognitive-unit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: model-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.unit.name }}-model-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.unit.name }}-model-server
+        {{- include "cognitive-unit.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: vllm
+          image: {{ .Values.unit.modelServer.image }}
+          args:
+            - "--model"
+            - {{ .Values.unit.modelServer.model | quote }}
+            - "--port"
+            - {{ .Values.unit.modelServer.port | quote }}
+          ports:
+            - containerPort: {{ .Values.unit.modelServer.port }}
+          resources:
+            {{- toYaml .Values.unit.modelServer.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.unit.modelServer.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 10
+{{- end }}
