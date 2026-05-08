@@ -192,13 +192,13 @@ backends.
 **CLI viewer (`ponder-audit` script, M1):** Plain-text output, three commands —
 `tail` (live event stream), `traces` (recent trace listing), `trace <id>`
 (events for one trace, prefix-matched). Implemented in
-`src/ponder/ponder/audit/cli.py` against the service layer. Textual-based
+`src/ponder/audit/cli.py` against the service layer. Textual-based
 TUI with vim-style navigation (per `audit-interface.md`) is deferred; the
 plain CLI is sufficient for current debugging.
 
 ### Orchestrator substrate (M1.1, validated under simulation)
 
-A reactive event-driven runtime in `src/ponder/ponder/orchestrator/` — separate
+A reactive event-driven runtime in `src/ponder/orchestrator/` — separate
 from the LangGraph linear pipeline (which remains the Phase 1 turn shape).
 `asyncio`-native, single-process. Validates the activation × communication
 matrix the user requires:
@@ -281,11 +281,11 @@ structural change.
 
 **Implementation status:**
 - M0 done: Phase 1 pipeline runs locally against docker-compose services
-- M1 done: audit subsystem in `src/ponder/ponder/audit/` (events, emitter, service, CLI)
-- M1.1 done: orchestrator substrate in `src/ponder/ponder/orchestrator/` (blackboard,
+- M1 done: audit subsystem in `src/ponder/audit/` (events, emitter, service, CLI)
+- M1.1 done: orchestrator substrate in `src/ponder/orchestrator/` (blackboard,
   dispatcher, specialist, runtime, simulated) with concurrent-activation demos
   validating composability matrix cells
-- M1.2 done: diagnostic panel in `src/ponder/ponder/diagnostics/` (FastAPI server,
+- M1.2 done: diagnostic panel in `src/ponder/diagnostics/` (FastAPI server,
   state/context/event SSE streams, snapshot, input/interrupt endpoints, browser UI)
 
 ---
@@ -430,36 +430,36 @@ charts/cognitive-unit/values.yaml         # [x] Region config: all 8 regions, en
 charts/cognitive-unit/templates/          # [x] ConfigMap, Deployments, Service
 manifests/redis.yaml                      # [x] Redis: Streams + Hash
 manifests/vector-store.yaml               # [x] Qdrant
-src/ponder/ponder/blackboard.py           # [x] BlackboardState TypedDict
-src/ponder/ponder/config.py               # [x] Config, env-driven
-src/ponder/ponder/model_client.py         # [x] generate() + generate_streaming() over vLLM/Ollama
-src/ponder/ponder/regions/thalamus.py     # [x] Input classifier
-src/ponder/ponder/regions/hippocampus.py  # [x] Memory retrieval + store_memory()
-src/ponder/ponder/regions/prefrontal.py   # [x] Goal decomposition
-src/ponder/ponder/regions/broca.py        # [x] Response generation
-src/ponder/ponder/graph/pipeline.py       # [x] LangGraph Phase 1 linear graph
-src/ponder/ponder/__main__.py             # [x] CLI entry
+src/ponder/blackboard.py           # [x] BlackboardState TypedDict
+src/ponder/config.py               # [x] Config, env-driven
+src/ponder/model_client.py         # [x] generate() + generate_streaming() over vLLM/Ollama
+src/ponder/regions/thalamus.py     # [x] Input classifier
+src/ponder/regions/hippocampus.py  # [x] Memory retrieval + store_memory()
+src/ponder/regions/prefrontal.py   # [x] Goal decomposition
+src/ponder/regions/broca.py        # [x] Response generation
+src/ponder/graph/pipeline.py       # [x] LangGraph Phase 1 linear graph
+src/ponder/__main__.py             # [x] CLI entry
 src/ponder/prompts/prefrontal_v1.txt      # [x] Prefrontal system prompt
 src/ponder/prompts/broca_v1.txt           # [x] Broca system prompt
-src/ponder/ponder/audit/events.py         # [x] AuditEvent + EventType (OTel-aligned)
-src/ponder/ponder/audit/emitter.py        # [x] Redis Stream publisher, resilient
-src/ponder/ponder/audit/service.py        # [x] Resource-oriented read API (events, traces, tail)
-src/ponder/ponder/audit/cli.py            # [x] `ponder-audit` CLI viewer
-src/ponder/ponder/orchestrator/blackboard.py    # [x] Async-aware key/value store + subscriptions
-src/ponder/ponder/orchestrator/specialist.py    # [x] Specialist protocol
-src/ponder/ponder/orchestrator/dispatcher.py    # [x] Priority queue + worker pool + model semaphore
-src/ponder/ponder/orchestrator/runtime.py       # [x] Lifecycle + state-change reaction + tick loops
-src/ponder/ponder/orchestrator/simulated.py     # [x] LatencyProfile / PacingProfile
-src/ponder/ponder/orchestrator/state.py         # [x] StateStore + ContextService + provider primitives
-src/ponder/ponder/diagnostics/server.py         # [x] FastAPI app (snapshot, events, SSE, input)
-src/ponder/ponder/diagnostics/__main__.py       # [x] `ponder-diagnostics` CLI entry (--runtime flag)
-src/ponder/ponder/diagnostics/panel.html        # [x] Browser UI (HTML + CSS + vanilla JS)
-src/ponder/ponder/diagnostics/runtime_factory.py     # [x] Panel-friendly runtime
-src/ponder/ponder/diagnostics/persuasion_runtime.py  # [x] Persuasion demo runtime (real-LLM speaker)
+src/ponder/audit/events.py         # [x] AuditEvent + EventType (OTel-aligned)
+src/ponder/audit/emitter.py        # [x] Redis Stream publisher, resilient
+src/ponder/audit/service.py        # [x] Resource-oriented read API (events, traces, tail)
+src/ponder/audit/cli.py            # [x] `ponder-audit` CLI viewer
+src/ponder/orchestrator/blackboard.py    # [x] Async-aware key/value store + subscriptions
+src/ponder/orchestrator/specialist.py    # [x] Specialist protocol
+src/ponder/orchestrator/dispatcher.py    # [x] Priority queue + worker pool + model semaphore
+src/ponder/orchestrator/runtime.py       # [x] Lifecycle + state-change reaction + tick loops
+src/ponder/orchestrator/simulated.py     # [x] LatencyProfile / PacingProfile
+src/ponder/orchestrator/state.py         # [x] StateStore + ContextService + provider primitives
+src/ponder/diagnostics/server.py         # [x] FastAPI app (snapshot, events, SSE, input)
+src/ponder/diagnostics/__main__.py       # [x] `ponder-diagnostics` CLI entry (--runtime flag)
+src/ponder/diagnostics/panel.html        # [x] Browser UI (HTML + CSS + vanilla JS)
+src/ponder/diagnostics/runtime_factory.py     # [x] Panel-friendly runtime
+src/ponder/diagnostics/persuasion_runtime.py  # [x] Persuasion demo runtime (real-LLM speaker)
 src/ponder/tests/                         # [x] Unit tests (138 total) — regions, pipeline, audit, orchestrator, state, simulated, diagnostics
 src/ponder/Dockerfile                     # [ ] Container image (needed for Step 3)
-src/ponder/ponder/broca/stream_consumer.py# [ ] Redis Stream consumer (Phase 2)
-src/ponder/ponder/evaluator/goal.py       # [ ] Goal condition evaluator (Phase 3)
+src/ponder/broca/stream_consumer.py# [ ] Redis Stream consumer (Phase 2)
+src/ponder/evaluator/goal.py       # [ ] Goal condition evaluator (Phase 3)
 b2/push_weights.sh                        # [ ] B2 weight upload
 b2/pull_weights.sh                        # [ ] B2 weight download
 CONTEXT.md                                # this file
