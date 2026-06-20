@@ -1,8 +1,6 @@
 # Ponder
 
-A streaming, asynchronous, feedback-coupled multi-agent inference system organized around a neuromorphic metaphor. Multiple specialist models — each owning a cognitive function analogous to a brain region — share a stateful blackboard and produce labeled output into a response generator (Broca) in real time.
-
-This is not a chatbot with a router. It is a synthetic mind with a voice.
+A streaming, asynchronous, feedback-coupled multi-agent inference system organized around a neuromorphic metaphor. Multiple specialist models — each owning a cognitive function analogous to a brain region — share a stateful blackboard and produce labeled output into a response generator in real time.
 
 For project context, design history, and architectural decisions, see [`CONTEXT.md`](../../CONTEXT.md) at the repo root and the `design/` directory. For deferred-improvement notes, see [`design/post-poc-review.md`](../../design/post-poc-review.md).
 
