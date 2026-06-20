@@ -13,7 +13,7 @@ owning a cognitive function analogous to a brain region — share a stateful
 blackboard and stream labeled output chunks into a response generator (Broca)
 in real time.
 
-This is not a chatbot with a router. It is a synthetic mind with a voice.
+This is not a chatbot with a router. It is an expert system with a voice.
 
 The biological framing is the hook, but the architecture is not constrained to
 it. Non-biological region types are expected in later phases.
